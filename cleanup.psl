@@ -1,0 +1,175 @@
+# Определение пути к рабочему столу
+$logFile = "$env:USERPROFILE\Desktop\cleanup_log.txt"
+Add-Content -Path $logFile -Value "Начало выполнения скрипта - $(Get-Date)"
+
+# Очистка временных файлов
+Add-Content -Path $logFile -Value "Очистка временных файлов..."
+Start-Process powershell -ArgumentList "Remove-Item -Path '$env:TEMP\*' -Recurse -Force -ErrorAction SilentlyContinue" -Verb RunAs
+Start-Process powershell -ArgumentList "Remove-Item -Path '$env:SystemRoot\Temp\*' -Recurse -Force -ErrorAction SilentlyContinue" -Verb RunAs
+Add-Content -Path $logFile -Value "Временные файлы очищены."
+
+# Очистка системного кэша (для Internet Explorer и Microsoft Edge)
+Add-Content -Path $logFile -Value "Очистка системного кэша..."
+Invoke-Expression -Command 'RunDll32.exe InetCpl.cpl,ClearMyTracksByProcess 8'
+Stop-Process -Name msedge -Force -ErrorAction SilentlyContinue
+Remove-Item -Path "$env:LOCALAPPDATA\Microsoft\Edge\User Data\Default\Cache\*" -Recurse -Force -ErrorAction SilentlyContinue
+Add-Content -Path $logFile -Value "Системный кэш очищен."
+
+# Очистка данных браузеров Chrome
+Add-Content -Path $logFile -Value "Очистка данных Chrome..."
+Stop-Process -Name chrome -Force -ErrorAction SilentlyContinue
+Remove-Item -Path "$env:LOCALAPPDATA\Google\Chrome\User Data\Default\Cache\*" -Recurse -Force -ErrorAction SilentlyContinue
+Remove-Item -Path "$env:LOCALAPPDATA\Google\Chrome\User Data\Default\Cookies" -Recurse -Force -ErrorAction SilentlyContinue
+Add-Content -Path $logFile -Value "Данные Chrome очищены."
+
+# Очистка данных Firefox
+Add-Content -Path $logFile -Value "Очистка данных Firefox..."
+Stop-Process -Name firefox -Force -ErrorAction SilentlyContinue
+Remove-Item -Path "$env:APPDATA\Mozilla\Firefox\Profiles\*.default-release\cache2\*" -Recurse -Force -ErrorAction SilentlyContinue
+Remove-Item -Path "$env:APPDATA\Mozilla\Firefox\Profiles\*.default-release\cookies.sqlite" -Recurse -Force -ErrorAction SilentlyContinue
+Add-Content -Path $logFile -Value "Данные Firefox очищены."
+
+# Очистка данных Opera
+Add-Content -Path $logFile -Value "Очистка данных Opera..."
+Stop-Process -Name opera -Force -ErrorAction SilentlyContinue
+Remove-Item -Path "$env:APPDATA\Opera Software\Opera Stable\Cache\*" -Recurse -Force -ErrorAction SilentlyContinue
+Remove-Item -Path "$env:APPDATA\Opera Software\Opera Stable\Cookies" -Recurse -Force -ErrorAction SilentlyContinue
+Add-Content -Path $logFile -Value "Данные Opera очищены."
+
+# Очистка данных Yandex
+Add-Content -Path $logFile -Value "Очистка данных Yandex..."
+Stop-Process -Name yandex -Force -ErrorAction SilentlyContinue
+Remove-Item -Path "$env:LOCALAPPDATA\Yandex\YandexBrowser\User Data\Default\Cache\*" -Recurse -Force -ErrorAction SilentlyContinue
+Remove-Item -Path "$env:LOCALAPPDATA\Yandex\YandexBrowser\User Data\Default\Cookies" -Recurse -Force -ErrorAction SilentlyContinue
+Add-Content -Path $logFile -Value "Данные Yandex очищены."
+
+# Отключение ненужных автозапусков
+Add-Content -Path $logFile -Value "Отключение ненужных автозапусков..."
+Get-CimInstance -ClassName Win32_StartupCommand | Where-Object { $_.Location -eq 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run' } | ForEach-Object {
+    Remove-ItemProperty -Path $_.Location -Name $_.Command -ErrorAction SilentlyContinue
+}
+Add-Content -Path $logFile -Value "Ненужные автозапуски отключены."
+
+# Очистка данных браузеров
+function Clear-BrowserData {
+    param (
+        [string]$processName,
+        [string]$cachePath,
+        [string]$historyPath,
+        [string]$cookiesPath
+    )
+    Add-Content -Path $logFile -Value "Очистка данных $processName..."
+    Stop-Process -Name $processName -Force -ErrorAction SilentlyContinue
+    Remove-Item -Path $cachePath -Recurse -Force -ErrorAction SilentlyContinue
+    Remove-Item -Path $historyPath -Force -ErrorAction SilentlyContinue
+    Remove-Item -Path $cookiesPath -Force -ErrorAction SilentlyContinue
+    Add-Content -Path $logFile -Value "Данные $processName очищены."
+}
+
+
+# Очистка каталога Prefetch
+Add-Content -Path $logFile -Value "Очистка каталога Prefetch..."
+Start-Process powershell -ArgumentList "Remove-Item -Path '$env:SystemRoot\Prefetch\*' -Recurse -Force -ErrorAction SilentlyContinue" -Verb RunAs
+Add-Content -Path $logFile -Value "Каталог Prefetch очищен."
+
+# Очистка сохранённых учётных данных Windows
+Add-Content -Path $logFile -Value "Очистка сохранённых учётных данных Windows..."
+cmdkey /list | ForEach-Object {
+    if ($_ -match "Target: (.+)") {
+        $target = $matches[1]
+        cmdkey /delete:$target
+        Add-Content -Path $logFile -Value "Учётные данные удалены: $target"
+    }
+}
+Add-Content -Path $logFile -Value "Учётные данные Windows очищены."
+
+# Очистка кэша обновлений Windows
+Add-Content -Path $logFile -Value "Очистка кэша обновлений Windows..."
+Stop-Service -Name wuauserv -Force -ErrorAction SilentlyContinue
+Stop-Service -Name cryptSvc -Force -ErrorAction SilentlyContinue
+Stop-Service -Name bits -Force -ErrorAction SilentlyContinue
+Stop-Service -Name msiserver -Force -ErrorAction SilentlyContinue
+
+Start-Process powershell -ArgumentList "Remove-Item -Path '$env:SystemRoot\SoftwareDistribution\*' -Recurse -Force -ErrorAction SilentlyContinue" -Verb RunAs
+Start-Process powershell -ArgumentList "Remove-Item -Path '$env:SystemRoot\System32\catroot2\*' -Recurse -Force -ErrorAction SilentlyContinue" -Verb RunAs
+
+Start-Service -Name wuauserv
+Start-Service -Name cryptSvc
+Start-Service -Name bits
+Start-Service -Name msiserver
+Add-Content -Path $logFile -Value "Кэш обновлений Windows очищен."
+
+# Сброс настроек Internet Explorer/Edge
+Add-Content -Path $logFile -Value "Сброс настроек Internet Explorer/Edge..."
+Invoke-Expression -Command 'RunDll32.exe InetCpl.cpl,ClearMyTracksByProcess 8'
+Add-Content -Path $logFile -Value "Настройки Internet Explorer/Edge сброшены."
+
+# Восстановление кэша Windows Store
+Add-Content -Path $logFile -Value "Восстановление кэша Windows Store..."
+Get-AppXPackage -AllUsers | ForEach-Object {
+    Add-AppxPackage -DisableDevelopmentMode -Register "$($_.InstallLocation)\AppXManifest.xml"
+}
+Add-Content -Path $logFile -Value "Кэш Windows Store восстановлен."
+
+# Восстановление системных файлов
+Add-Content -Path $logFile -Value "Восстановление системных файлов..."
+sfc /scannow | Out-File -Append -FilePath $logFile
+Add-Content -Path $logFile -Value "Восстановление завершено."
+
+# Восстановление мастер-загрузочного сектора (MBR)
+Add-Content -Path $logFile -Value "Восстановление мастер-загрузочного сектора (MBR)..."
+bootrec /fixmbr | Out-File -Append -FilePath $logFile
+bootrec /fixboot | Out-File -Append -FilePath $logFile
+bootrec /scanos | Out-File -Append -FilePath $logFile
+bootrec /rebuildbcd | Out-File -Append -FilePath $logFile
+Add-Content -Path $logFile -Value "Восстановление MBR завершено."
+
+# Проверка состояния службы Windows Update
+Add-Content -Path $logFile -Value "Проверка состояния службы Windows Update..."
+sc query wuauserv | Out-File -Append -FilePath $logFile
+Add-Content -Path $logFile -Value "Служба Windows Update проверена."
+
+# Ремонт установленных приложений
+Add-Content -Path $logFile -Value "Ремонт установленных приложений..."
+Get-AppxPackage | ForEach-Object {
+    Repair-AppxPackage -Package $_.PackageFullName
+}
+Add-Content -Path $logFile -Value "Приложения отремонтированы."
+
+# Проверка и исправление проблем с конфигурацией сети
+Add-Content -Path $logFile -Value "Проверка и исправление проблем с конфигурацией сети..."
+netsh winsock reset | Out-File -Append -FilePath $logFile
+netsh int ip reset | Out-File -Append -FilePath $logFile
+ipconfig /flushdns | Out-File -Append -FilePath $logFile
+Add-Content -Path $logFile -Value "Конфигурация сети восстановлена."
+
+# Закрытие ненужных процессов
+Add-Content -Path $logFile -Value "Закрытие ненужных процессов..."
+$processes = "calc.exe", "CptService.exe", "service_update.exe", "browser.exe", "RuntimeBroker.exe", "pdf24.exe", "msedge.exe", "msedgewebview2.exe", "cortana.exe", "AnalyticsSrv.exe", "AuthManSvr.exe", "concentr.exe", "wfcrun32.exe", "redirector.exe", "SelfService.exe", "Receiver.exe"
+foreach ($proc in $processes) {
+    Stop-Process -Name $proc -Force -ErrorAction SilentlyContinue
+}
+Add-Content -Path $logFile -Value "Ненужные процессы закрыты."
+
+# Оптимизация и дефрагментация всех дисков
+Add-Content -Path $logFile -Value "Оптимизация и дефрагментация всех дисков..."
+Get-WmiObject -Class Win32_LogicalDisk | ForEach-Object {
+    defrag $_.DeviceID /O /H | Out-File -Append -FilePath $logFile
+    Add-Content -Path $logFile -Value "Оптимизация и дефрагментация завершены для диска $($_.DeviceID)"
+}
+Add-Content -Path $logFile -Value "Оптимизация и дефрагментация завершены."
+
+# Проверка состояния и исправление ошибок жесткого диска
+Add-Content -Path $logFile -Value "Проверка состояния жесткого диска..."
+chkdsk C: /f /r | Out-File -Append -FilePath $logFile
+Add-Content -Path $logFile -Value "Проверка завершена. Необходимо перезагрузить компьютер для завершения проверки."
+
+# Проверка состояния дисков и SMART
+Add-Content -Path $logFile -Value "Проверка состояния дисков и SMART..."
+Get-PhysicalDisk | Format-Table -AutoSize | Out-File -Append -FilePath "$env:USERPROFILE\Desktop\diagnostic_report.txt" -Encoding Unicode
+Add-Content -Path $logFile -Value "Состояние дисков проверено."
+
+# Завершение скрипта
+Add-Content -Path $logFile -Value "Лечебный процесс завершен. Пожалуйста, перезагрузите компьютер, если это необходимо."
+Write-Output "Лечебный процесс завершен. Пожалуйста, перезагрузите компьютер, если это необходимо."
+Read-Host -Prompt "Нажмите любую клавишу для завершения"
